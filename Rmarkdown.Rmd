@@ -1,0 +1,48 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+###############################################################################################
+# Background
+
+This is IT incident data downloaded in the SNOW between 2018-07-01 to 2019-10-31, last refreshed at 2019-11-01 
+
+# Data exploration
+
+* read data file names
+```{r read raw files, include=FALSE}
+getwd()
+file_name <- list.files(path="./files/", pattern = NULL)
+file_path <- paste(getwd(),"/files/", file_name, sep="")
+```
+
+```{r 00110, echo=FALSE}
+cat("Incident data is creatd by midserver or guest:", comma(n1-n2,digits=0), 
+    "out of", comma(n1,digits=0), ",", round((n1-n2)/n1*100), "%")
+```
+
+There is data having no creation date, 21872, it needs to remove the data 
+Why does this error often occur? 
+```{r 00120, echo=FALSE}
+data %>% mutate(NG = ifelse(business_duration == calendar_duration, 1,0), 
+                yyyymm = as.Date(str_c(substr(created_on, 1,7), "-01"))) %>% 
+  group_by(yyyymm) %>% dplyr::summarise(wrong_duration = sum(NG), total = n(), percent = comma(wrong_duration/total*100)) %>% arrange(desc(yyyymm))
+```
+
