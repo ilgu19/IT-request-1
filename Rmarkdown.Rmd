@@ -38,8 +38,6 @@ cat("Incident data is creatd by midserver or guest:", comma(n1-n2,digits=0),
     "out of", comma(n1,digits=0), ",", round((n1-n2)/n1*100), "%")
 ```
 
-There is data having no creation date, 21872, it needs to remove the data 
-Why does this error often occur? 
 ```{r 00120, echo=FALSE}
 data %>% mutate(NG = ifelse(business_duration == calendar_duration, 1,0), 
                 yyyymm = as.Date(str_c(substr(created_on, 1,7), "-01"))) %>% 

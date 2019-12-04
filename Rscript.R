@@ -15,7 +15,23 @@ i<- 0
 for (j in file_path)
 {
   i <- i + 1
-  assign(paste("file", i, sep = ""), read_csv(j))
+  assign(paste("file", i, sep = ""), read_csv(j, locale = locale(encoding = "UTF-8"),
+                                              col_types = cols(
+                                                .default = col_character(),
+                                                sys_created_on = col_character(),
+                                                resolved_by.user_name = col_character(),
+                                                reassignment_count = col_number(),
+                                                reopen_count = col_number(),
+                                                business_duration = col_number(),
+                                                calendar_duration = col_number(),
+                                                due_date = col_character(),
+                                                u_erp_related = col_character(),
+                                                business_stc = col_number(),
+                                                caller_id.u_cmgleavingdate = col_datetime(format = ""),
+                                                caller_id.u_cmgjoiningdate = col_date(format = ""),
+                                                location.u_location_id = col_character(),
+                                                location.u_cmg.u_cmgcmgnumber = col_character()
+                                              )))
 }
 
 n<-i
@@ -90,8 +106,8 @@ data <-
   data %>% 
   filter(created_by != "midserver" ) %>%
   filter(created_by != "guest"  )
-
 n2 <- nrow(data)
+
 #00110
 cat("Incident data is creatd by midserver or guest:", comma(n1-n2,digits=0), 
     "out of", comma(n1,digits=0), ",", round((n1-n2)/n1*100), "%")
@@ -104,7 +120,3 @@ data %>% mutate(NG = ifelse(business_duration == calendar_duration, 1,0),
                                         percent = wrong_duration/total*100) %>% 
   arrange(desc(yyyymm))
 
-data <-
-  
-  temp <-
-  data %>% filter(is.na(created_on))
