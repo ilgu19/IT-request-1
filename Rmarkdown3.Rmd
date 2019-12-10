@@ -168,4 +168,68 @@ n3 <- nrow(temp)
 NAcols3
 ```
 
+###BSID
+BSID is important because this is the baseline measurement with business agreement 
+**Fill the missing BSID with the most frequent value of assignment group**
+```{r, include=FALSE}
+#Fill the missing BSID with the most frequent value of assignment_Group
+data %>% group_by(X_bs_id) %>% distinct(X_bs_id)
+BSID <- 
+  data %>% group_by(assignment_grp, X_bs_id) %>% dplyr::summarise(n = n())
+
+BSID <-
+  BSID %>% group_by(assignment_grp) %>% top_n(1, n) %>% filter(!is.na(X_bs_id))
+
+data <-
+  data %>% left_join(BSID, by = "assignment_grp") %>%
+  mutate(X_bs_id.x = ifelse(is.na(X_bs_id.x), X_bs_id.y, X_bs_id.x))
+data$X_bs_id.y <- NULL
+data$n <- NULL
+data <- data %>% dplyr::rename( X_bs_id = X_bs_id.x)
+```
+
+* 42,477 out of 83,555 missing BSID is still remained as missing(51%) after null value handling
+* with assignment group & service component we can found that most of the missing data is related to SIAL, 34,705 out of 42,777(82%)
+* Every momth it occurs around 2500 SIAL incidents which don't have BSID, whereas around 4500 has BSID every month in SIAL ticket
+* It needs to identify the causes of missing BSID & improve the situation
+
+```{r, echo=FALSE}
+data %>% filter(str_detect(assignment_grp, "SIAL") | str_detect(X_service_component, "SIAL")) %>% filter(!is.na(X_bs_id)) %>% 
+  group_by(yyyymm) %>%  dplyr::summarise(n = n())
+```
+
+Let's try again with IT engineer who resolve the incident to fill the BSID
+38,093 out of 42,477 missing BSID is still remained as missing(89%) after null imputation with IT engineer
+Still we have high number of missing BSID, but it is less than 1% of total incidents
+
+```{r, eval=FALSE}
+BSID <- 
+  data %>% group_by(resolved_by_id, X_bs_id) %>% dplyr::summarise(n = n())
+
+BSID <-
+  BSID %>% group_by(resolved_by_id) %>% top_n(1, n) %>% filter(!is.na(resolved_by_id)) %>% filter(!is.na(X_bs_id)) %>% filter(n > 1)
+
+data <-
+  data %>% left_join(BSID, by = "resolved_by_id") %>%
+  mutate(X_bs_id.x = ifelse(is.na(X_bs_id.x), X_bs_id.y, X_bs_id.x))
+data$X_bs_id.y <- NULL
+data$n <- NULL
+data <- data %>% dplyr::rename( X_bs_id = X_bs_id.x)
+```
+
+If it narrow down the incidents created only by the business user not IT, it is 30534 missing values out of total 466,393, 6.5%
+
+```{r, echo=FALSE}
+NAcol <- which(colSums(is.na(data))>0)
+NAcols5 <- sort(colSums(sapply(data[NAcol],is.na)), decreasing = T)
+#NAcols2 #83555 -> 42477 -> 38673 (for internal)
+
+data %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved), request_div != "IT") %>%  dplyr::summarise(Miss_BSD = sum(is.na(X_bs_id)), Not_Miss_BSD = sum(!is.na(X_bs_id)), 
+                                                                                        all_biz_resolved_incidents = Miss_BSD+Not_Miss_BSD, Miss_BSD/(Miss_BSD+Not_Miss_BSD)*100)
+```
+
+
+
+
+
 ##dddddddddddddd

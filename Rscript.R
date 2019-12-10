@@ -207,7 +207,7 @@ data <- data %>% dplyr::rename( Z_jobfamily = Z_jobfamily.x)
 #Z_jobfamily 119922 -> 119865  -> 9021
 
 temp <-
-  data %>% filter(substr(Z_cmguserid,1,1) == "M")
+  data %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved)) 
 
 NAcol <- which(colSums(is.na(temp))>0)
 NAcols3 <- sort(colSums(sapply(temp[NAcol],is.na)), decreasing = T)
@@ -218,6 +218,85 @@ NAcols3
 aggr(temp[,c("Y_locationname", "Y_location_id", "Y_country", "Y_cmgnumber", "Y_timezone", "location.u_cmg.u_cmgcmgofficialname")], 
      prop = FALSE, combined = TRUE, numbers = TRUE, sortVars = TRUE, sortCombs = TRUE) 
 
+#Fill the missing BSID with the most frequent value of assignment_Group
+data %>% group_by(X_bs_id) %>% distinct(X_bs_id)
+BSID <- 
+  data %>% group_by(assignment_grp, X_bs_id) %>% dplyr::summarise(n = n())
+
+BSID <-
+  BSID %>% group_by(assignment_grp) %>% top_n(1, n) %>% filter(!is.na(X_bs_id))
+
+data <-
+  data %>% left_join(BSID, by = "assignment_grp") %>%
+  mutate(X_bs_id.x = ifelse(is.na(X_bs_id.x), X_bs_id.y, X_bs_id.x))
+data$X_bs_id.y <- NULL
+data$n <- NULL
+data <- data %>% dplyr::rename( X_bs_id = X_bs_id.x)
+
+NAcol <- which(colSums(is.na(data))>0)
+NAcols4 <- sort(colSums(sapply(data[NAcol],is.na)), decreasing = T)
+NAcols2 #83555 -> 42477 -> 38673 (for internal)
+
+# 37580 -> 6782
+data %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved), is.na(X_bs_id)) %>%  dplyr::summarise(n = n()) #write_csv("bsid_null.csv")
+
+data %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved), is.na(X_bs_id)) %>% 
+  filter(!str_detect(assignment_grp, "SIAL")) %>% filter(!str_detect(X_service_component, "SIAL"))
+#34705
+data %>% filter(str_detect(assignment_grp, "SIAL") | str_detect(X_service_component, "SIAL")) %>% filter(is.na(X_bs_id)) %>% 
+  group_by(yyyymm) %>%  dplyr::summarise(n = n()) #write_csv("bsid_sial.csv")
+
+
+#Fill the missing BSID with the most frequent value of IT engineer
+BSID <- 
+  data %>% group_by(resolved_by_id, X_bs_id) %>% dplyr::summarise(n = n())
+
+BSID <-
+  BSID %>% group_by(resolved_by_id) %>% top_n(1, n) %>% filter(!is.na(resolved_by_id)) %>% filter(!is.na(X_bs_id)) %>% filter(n > 1)
+
+data <-
+  data %>% left_join(BSID, by = "resolved_by_id") %>%
+  mutate(X_bs_id.x = ifelse(is.na(X_bs_id.x), X_bs_id.y, X_bs_id.x))
+data$X_bs_id.y <- NULL
+data$n <- NULL
+data <- data %>% dplyr::rename( X_bs_id = X_bs_id.x)
+
+NAcol <- which(colSums(is.na(data))>0)
+NAcols5 <- sort(colSums(sapply(data[NAcol],is.na)), decreasing = T)
+NAcols2 #83555 -> 42477 -> 38673 (for internal)
+
+data %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved), request_div != "IT") %>%  
+  dplyr::summarise(Miss_BSD = sum(is.na(X_bs_id)), Not_Miss_BSD = sum(!is.na(X_bs_id)), 
+                   all_biz_resolved_incidents = Miss_BSD+Not_Miss_BSD, Miss_BSD/(Miss_BSD+Not_Miss_BSD)*100)
+
+####################################################################################
+
+Charcol <- names(data[,sapply(data, is.character)])
+Numcol <- names(data[,sapply(data, is.numeric)])
+
+sum(table(data$X_bs_id))
+
+numericVars <- which(sapply(data3A, is.numeric))
+numericVarNames <- names(numericVars)
+cat("There are", length(numericVars), "numeric variables")
+
+all_numVar <- data3A[, numericVars]
+cor_numVar <- cor(all_numVar, use = "pairwise.complete.obs")
+
+cor_sorted <- as.matrix(sort(cor_numVar[,2], decreasing = T)) #eng_business_duration3_sum
+corHigh <- names(which(apply(cor_sorted, 1, function(x) abs(x)> 0.5)))
+cor_numVar <- cor_numVar[corHigh,corHigh]
+corrplot.mixed(cor_numVar, tl.col ="black",tl.pos="lt")
+
+library("skimr")
+skimmed <- skim_to_wide(temp)
+skimmed[, c(1:5, 9:11, 13, 15:16)]
+skimmed %>% arrange(type, desc(missing))
+write_csv(skimmed, "data_skimmed.csv", na = "")
+
+temp %>% distinct(incident_type)
+
+table(temp$Y_cmg_shortname)
 
 ####################################################################################
 #convert seconds to to hours, days
@@ -252,8 +331,35 @@ data %>% filter(state2 == "Closed", is.na(resolved))
 data %>% filter(state2 == "Progressing", !is.na(resolved)) 
 data %>% filter(state2 == "Backlog", !is.na(resolved)) 
 
+colnames(data)
+
+data %>% select(-reactivation_time, -Y_location_id) %>% write_csv("all_incidents.csv", na = "")
 #power BI에서 특수문자의 경우 에러 발생, 확인 필요
 #data$short_desc2 <- str_replace_all(data2$short_desc, "[?<>+]", "99")
+#data %>% write_csv("inc_data2.csv", na = "", locale = locale(encoding = "UTF-8"))
 
-data %>% write_csv("inc_data2.csv", na = "", locale = locale(encoding = "UTF-8"))
+data %>% filter(!is.na(resolved), LT_hour >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_histogram(binwidth = 1) + xlim(0, 40)
+data %>% filter(!is.na(resolved), LT_hour >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_freqpoly(aes(color = BSID), binwidth = 1) + xlim(0, 40)
+data %>% filter(!is.na(resolved), LT_hour >=10, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_freqpoly(binwidth = 5) + xlim(10, 80)
+data %>% filter(!is.na(resolved), LT_hour >=0,  !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(ERP, LT_hour)) + geom_boxplot() + ylim(0, 240) #30 days
 
+temp <-
+data %>% filter(number == "INC2080286")
+
+####################################################################################
+# BSID data
+
+BS_data <- read_csv("u_cmdb_ci_service_2019.csv")
+
+BS_data %>% filter(!is.na(u_bs_id), substr(u_approval_status, 1,8) == "approved") %>% 
+  group_by(u_bs_id) %>% dplyr::summarise(n = n()) %>%
+  filter(n >= 2)
+
+BS_data %>% filter(!is.na(u_bs_id), substr(u_approval_status, 1,8) == "approved") %>% 
+  group_by(u_bs_id) %>% top_n(1, u_version) %>% write_csv("BSD_201912.csv")
+
+####################################################################################
+
+temp1 <- temp %>% distinct(Z_employeetype)
+rm(temp)
+quantile(temp$LT_hour)
