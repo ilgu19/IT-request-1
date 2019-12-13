@@ -127,7 +127,7 @@ data <- data %>% dplyr::rename( Z_jobfamily = Z_jobfamily.x)
 
 ```
 
-**Fill the missing jobfamily with the most frequent value of position**
+**Again let's fill the missing jobfamily with the most frequent value of position**
 ```{r, include=FALSE}
 position <- 
   data %>% group_by(Z_position, Z_jobfamily) %>% dplyr::summarise(n = n())
@@ -154,8 +154,8 @@ NAcols2
 ##Missing value only for internal emplyee 
 
 Assinging missing Country, Region data with the mode of related data is successful, but not significant imputation for job family.
-Later incident data will be screened by requestor data whose internal employee indicator is "Y" then these missing value will be reduced again.
-In this case, total data is 486531, missing data 9559 / thus missing Country, Region, job family is around 2% for Merck internal requestor.
+Later incident data will be screened by requestor whose internal employee indicator is "Y" then these missing value will be reduced again.
+In this case, total data is 486531, missing data 9559 / thus missing Country, Region, job family is less than 2% for Merck internal requestor.
 This is good result after null imputation.
 
 ```{r, echo=FALSE}
@@ -169,7 +169,7 @@ NAcols3
 ```
 
 ###BSID
-BSID is important because this is the baseline measurement with business agreement 
+BSID value is important because this is the baseline measurement with business agreement 
 **Fill the missing BSID with the most frequent value of assignment group**
 ```{r, include=FALSE}
 #Fill the missing BSID with the most frequent value of assignment_Group
@@ -228,8 +228,41 @@ data %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved), request_div !=
                                                                                         all_biz_resolved_incidents = Miss_BSD+Not_Miss_BSD, Miss_BSD/(Miss_BSD+Not_Miss_BSD)*100)
 ```
 
+###Data Review again
 
+Finally let's see characteristics of all the data created by Merck employee including IT
 
+Character data such as "incident_type, request_div, urgency, Y_country, Y_timezone, Z_jobfamily, state, state2" has less than 2% missing data, 
+and values(features) in the data are maximum 120. Later these data will be transformed to categorical data
+
+```{r, echo=FALSE}
+skimmed %>% filter(type == "character") %>% arrange(type, as.numeric(n_unique), desc(missing))
+```
+
+For Numeric data such as LT_day(lead time in day), LT_hour 75th quantile is 2.6 days with 9.5 standard deviation,
+
+```{r, echo=FALSE}
+#skimmed %>% filter(type == "numeric") %>% arrange(type, as.numeric(n_unique), desc(missing))
+skimmed %>% filter(variable %in% c("LT_day","LT_hour")) %>% select(variable, mean,sd,starts_with("p"))
+```
+
+It is true that lead time of most incidents is located within 10 days, but still many data also stay between 15 ~ 45days.
+
+```{r, echo=FALSE}
+data %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved)) %>% 
+  ggplot(aes(LT_day)) + geom_histogram(binwidth = 10) + xlim(10,50) 
+```
+
+###Reassignment, Reopen
+
+There needs to check the case when Reassignment >= 4, reopen_count >= 2, as it is related to not clear service matirix as well as service lead time  
+```{r, echo=FALSE}
+data %>% filter(!is.na(resolved), substr(Z_cmguserid,1,1) == "M", reassignment_cnt >= 4) %>% 
+  group_by(yyyymm) %>% dplyr::summarise(reassign=n()) %>% arrange(desc(yyyymm))
+
+data %>% filter(!is.na(resolved), substr(Z_cmguserid,1,1) == "M", reopen_count >= 2) %>% 
+  group_by(yyyymm) %>% dplyr::summarise(reopen=n()) %>% arrange(desc(yyyymm))  
+```
 
 
 ##dddddddddddddd

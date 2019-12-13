@@ -5,6 +5,7 @@ library('plyr') #Splitting, Applying and Combining Data, files
 library('knitr') # Markdown
 library('formattable') # number format
 library('VIM') # Missing value check
+library("skimr") # Missing value check
 
 # read data file names
 getwd()
@@ -269,6 +270,19 @@ data %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved), request_div !=
   dplyr::summarise(Miss_BSD = sum(is.na(X_bs_id)), Not_Miss_BSD = sum(!is.na(X_bs_id)), 
                    all_biz_resolved_incidents = Miss_BSD+Not_Miss_BSD, Miss_BSD/(Miss_BSD+Not_Miss_BSD)*100)
 
+
+#Finally let's see characteristics of all the data created by Merck employee including IT
+skimmed <- skim_to_wide(filter(data, substr(Z_cmguserid,1,1) == "M", !is.na(resolved)))
+skimmed[, c(1:5, 9:11, 13, 15:16)]
+skimmed %>% filter(type == "character") %>% arrange(as.numeric(n_unique), desc(missing))
+skimmed %>% filter(type == "numeric") %>% arrange(as.numeric(n_unique), desc(missing))
+skimmed %>% filter(variable %in% c("LT_day","LT_hour")) %>% select(variable, mean,sd,starts_with("p"))
+
+data %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved)) %>% 
+  ggplot(aes(LT_day)) + geom_histogram(binwidth = 10) + xlim(10,50) 
+  
+#quantile(x, probs = c(0.05, 0.06, 0.07, 0.08, 0.09, 0.1),na.rm = FALSE)
+
 ####################################################################################
 
 Charcol <- names(data[,sapply(data, is.character)])
@@ -288,25 +302,31 @@ corHigh <- names(which(apply(cor_sorted, 1, function(x) abs(x)> 0.5)))
 cor_numVar <- cor_numVar[corHigh,corHigh]
 corrplot.mixed(cor_numVar, tl.col ="black",tl.pos="lt")
 
-library("skimr")
-skimmed <- skim_to_wide(temp)
-skimmed[, c(1:5, 9:11, 13, 15:16)]
-skimmed %>% arrange(type, desc(missing))
-write_csv(skimmed, "data_skimmed.csv", na = "")
-
-temp %>% distinct(incident_type)
-
-table(temp$Y_cmg_shortname)
-
 ####################################################################################
 #convert seconds to to hours, days
 library(lubridate)
 
+Nweekdays(as.Date("2019-12-07"), as.Date("2019-12-08"))
+Nweekdays <- function(a,b)
+{
+  ifelse(is.na(a)|is.na(b), return(0), 
+         dates <- as.numeric((as.Date(a,"%m/%d/%y")):(as.Date(b,"%m/%d/%y"))) 
+         return(sum(dates%%7%in%c(2,3))))
+}
+Nweekdays <- function(a,b)
+{
+  dates <- as.numeric(a:b)
+  return(sum(dates%%7%in%c(2,3)))
+}
+
 data <- data %>% 
-  mutate( LT_day = round( ifelse(business_duration == calendar_duration & calendar_duration >0, business_duration / 3600 / 24, business_duration / 3600 / 8), digits = 2),
-          LT_hour = round( ifelse(business_duration == calendar_duration & calendar_duration >0, business_duration / 3600 / 3, business_duration / 3600), digits = 2) ) %>%
-  mutate( LT_day = ifelse(business_duration == 0 & calendar_duration >0, round(calendar_duration / 3600 / 24, digits = 2), LT_day),
-          LT_hour = ifelse(business_duration == 0 & calendar_duration >0, round(calendar_duration / 3600 / 3, digits = 2), LT_hour),
+  mutate(created_on2 = substr(created_on, 1,10), 
+         resolved2   = substr(resolved, 1,10), 
+         weekdays    = Nweekdays(as.Date(created_on2), as.Date(ifelse(is.na(resolved2),created_on2,resolved2)))) %>%
+  mutate( LT_day = round( ifelse(business_duration == calendar_duration & calendar_duration >0, (business_duration / 3600 / 24) - weekdays, business_duration / 3600 / 8), digits = 2),
+        LT_hour = round( ifelse(business_duration == calendar_duration & calendar_duration >0, (business_duration / 3600 / 3) - weekdays * 8 , business_duration / 3600), digits = 2) ) %>%
+  mutate( LT_day = ifelse(business_duration == 0 & calendar_duration >0, round((calendar_duration / 3600 / 24) - weekdays, digits = 2), LT_day),
+          LT_hour = ifelse(business_duration == 0 & calendar_duration >0, round((calendar_duration / 3600 / 3) - weekdays* 8, digits = 2), LT_hour),
           LT10_20 = ifelse(LT_day > 10 & LT_day <= 20 ,1,0),
           LT20_40 = ifelse(LT_day > 20 & LT_day <= 40 ,1,0),
           LT40_up  = ifelse(LT_day > 40,1,0),
@@ -331,23 +351,40 @@ data %>% filter(state2 == "Closed", is.na(resolved))
 data %>% filter(state2 == "Progressing", !is.na(resolved)) 
 data %>% filter(state2 == "Backlog", !is.na(resolved)) 
 
-colnames(data)
+#data check Y_location_id as it has some characters in the value
+temp <- data %>% filter(number == "INC2080286")
+filter(sapply(data[, "Y_location_id"], is.character))
+data <-
+  data %>% mutate( Y_location_id = substr(Y_location_id,1,6))
 
-data %>% select(-reactivation_time, -Y_location_id) %>% write_csv("all_incidents.csv", na = "")
+data %>% write_csv("all_incidents.csv", na = "")
 #power BI에서 특수문자의 경우 에러 발생, 확인 필요
 #data$short_desc2 <- str_replace_all(data2$short_desc, "[?<>+]", "99")
 #data %>% write_csv("inc_data2.csv", na = "", locale = locale(encoding = "UTF-8"))
 
+#data check for the case of business_duration != calendar_duration
+data %>% filter(business_duration != calendar_duration, business_duration >= 216000 , !is.na(resolved), substr(Z_cmguserid,1,1) == "M") %>% 
+  select(number, created_on, resolved, business_duration, calendar_duration) %>% arrange(desc(created_on)) %>%
+  write_csv("correct_duration.csv")
+
+#There needs to check the case when Reassignment >= 4, reopen_count >= 2, as it is related to not clear service matirix as well as service lead time  
+temp <-
+data %>% filter(number == "INC1760427" | number == "INC1713730")
+
+data %>% filter(!is.na(resolved), substr(Z_cmguserid,1,1) == "M", reassignment_cnt >= 4) %>% 
+  group_by(yyyymm) %>% dplyr::summarise(reassign=n()) %>% arrange(desc(yyyymm))
+
+data %>% filter(!is.na(resolved), substr(Z_cmguserid,1,1) == "M", reopen_count >= 2) %>% 
+  group_by(yyyymm) %>% dplyr::summarise(reopen=n()) %>% arrange(desc(yyyymm))  
+
+#Data distribution review
 data %>% filter(!is.na(resolved), LT_hour >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_histogram(binwidth = 1) + xlim(0, 40)
 data %>% filter(!is.na(resolved), LT_hour >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_freqpoly(aes(color = BSID), binwidth = 1) + xlim(0, 40)
 data %>% filter(!is.na(resolved), LT_hour >=10, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_freqpoly(binwidth = 5) + xlim(10, 80)
 data %>% filter(!is.na(resolved), LT_hour >=0,  !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(ERP, LT_hour)) + geom_boxplot() + ylim(0, 240) #30 days
 
-temp <-
-data %>% filter(number == "INC2080286")
-
 ####################################################################################
-# BSID data
+# Read BSID data downloaded on 2019-12-09, filtered by approved status only 
 
 BS_data <- read_csv("u_cmdb_ci_service_2019.csv")
 
