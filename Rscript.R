@@ -11,6 +11,7 @@ library("skimr") # Missing value check
 getwd()
 file_name <- list.files(path="./files/", pattern = NULL)
 file_path <- paste(getwd(),"/files/", file_name, sep="")
+#file_path <- file_path[19]
 
 # read data from excel files in the folder
 i<- 0
@@ -137,6 +138,12 @@ data %>% mutate(NG = ifelse(business_duration == calendar_duration, 1,0),
 NAcol <- which(colSums(is.na(data))>0)
 NAcols <- sort(colSums(sapply(data[NAcol],is.na)), decreasing = T)
 
+
+###################################################################################
+###################################################################################
+###################################################################################
+###################################################################################
+
 #locationname can provide missed country info(28,707), also same with the region(timezone, 151,592) info by country data
 data %>% filter(is.na(Y_country)) %>% distinct(Y_locationname) %>% write_csv("country_missing.csv")
 data %>% distinct(Y_country) %>% write_csv("country.csv")
@@ -145,15 +152,49 @@ country_location <- read_csv("Country_location_master.csv")
 # country missing value is reduced to 10,869, this is due to no location info 
 data <-
 data %>% left_join(country_location, by = c("Y_locationname" = "Location")) %>%
-  mutate(Y_country = ifelse(is.na(Country),Y_country,Country))
+  mutate(Y_country = ifelse(is.na(Country),Y_country, Country))
 data$Country <- NULL
+
+# Fill the missing country/region with the most frequent value of business user
+country <- 
+  data %>% group_by(Z_cmguserid, Y_country, Y_timezone) %>% dplyr::summarise(n = n()) 
+
+country <-
+  country %>% group_by(Z_cmguserid) %>% filter(!is.na(Y_country), !is.na(Y_timezone)) %>% top_n(1, n)
+
+data <-
+  data %>% left_join(country, by = "Z_cmguserid") %>%
+  mutate(Y_country.x = ifelse(is.na(Y_country.x), Y_country.y, Y_country.x),
+         Y_timezone.x = ifelse(is.na(Y_timezone.x), Y_timezone.y, Y_timezone.x))
+data$Y_country.y <- NULL
+data$Y_timezone.y <- NULL
+data$n <- NULL
+data <- data %>% dplyr::rename( Y_country = Y_country.x,
+                                Y_timezone = Y_timezone.x)
+
+#Fill the missing Y_cmg_short/long name data with the most frequent value, Y_location_id
+cmg_name <- 
+  data %>% group_by(Y_location_id, Y_cmg_shortname, Y_cmg_longname) %>% dplyr::summarise(n = n()) 
+
+cmg_name <-
+  cmg_name %>% group_by(Y_location_id) %>% filter(!is.na(Y_cmg_shortname)) %>% top_n(1, n)
+
+data <-
+  data %>% left_join(cmg_name, by = "Y_location_id") %>%
+  mutate(Y_cmg_shortname.x = ifelse(is.na(Y_cmg_shortname.x), Y_cmg_shortname.y, Y_cmg_shortname.x),
+         Y_cmg_longname.x = ifelse(is.na(Y_cmg_longname.x), Y_cmg_longname.y, Y_cmg_longname.x))
+data$Y_cmg_shortname.y <- NULL
+data$Y_cmg_longname.y <- NULL
+data$n <- NULL
+data <- data %>% dplyr::rename( Y_cmg_shortname = Y_cmg_shortname.x,
+                                Y_cmg_longname = Y_cmg_longname.x)
 
 #Fill the missing region data with the most frequent value 
 region <-
   data %>% group_by(Y_country, Y_timezone) %>% dplyr::summarise(n = n()) 
 
 region <-
-region %>% group_by(Y_country) %>% top_n(1, n)
+region %>% group_by(Y_country) %>% filter(!is.na(Y_timezone)) %>%  top_n(1, n)
 
 region <-
 region %>% mutate(Y_timezone = ifelse(Y_country %in% c("United States of America", "Canada"),"NAm",
@@ -176,7 +217,7 @@ jobfamily <-
   data %>% group_by(Z_cmguserid, Z_jobfamily) %>% dplyr::summarise(n = n()) %>% write_csv("job.csv")
 
 jobfamily <-
-  jobfamily %>% group_by(Z_cmguserid) %>% top_n(1, n) %>% filter(!is.na(Z_jobfamily))
+  jobfamily %>% group_by(Z_cmguserid) %>% filter(!is.na(Z_jobfamily)) %>% top_n(1, n)
 
 data <-
   data %>% left_join(jobfamily, by = "Z_cmguserid") %>%
@@ -189,18 +230,52 @@ NAcol <- which(colSums(is.na(data))>0)
 NAcols2 <- sort(colSums(sapply(data[NAcol],is.na)), decreasing = T)
 
 #Fill the missing jobfamily with the most frequent value of position
+# position <- 
+#   data %>% group_by(Z_position, Z_jobfamily) %>% dplyr::summarise(n = n())
+# 
+# position <-
+#   position %>% group_by(Z_position) %>% filter(!is.na(Z_jobfamily)) %>% top_n(1, n) 
+# 
+# data <-
+#   data %>% left_join(position, by = "Z_position") %>%
+#   mutate(Z_jobfamily.x = ifelse(is.na(Z_jobfamily.x), Z_jobfamily.y, Z_jobfamily.x))
+# data$Z_jobfamily.y <- NULL
+# data$n <- NULL
+# data <- data %>% dplyr::rename( Z_jobfamily = Z_jobfamily.x)
+
+#Fill the missing jobfamily with the most frequent value of userid
 position <- 
-  data %>% group_by(Z_position, Z_jobfamily) %>% dplyr::summarise(n = n())
+  data %>% group_by(Z_cmguserid, Z_position) %>% dplyr::summarise(n = n())
 
 position <-
-  position %>% group_by(Z_position) %>% top_n(1, n) %>% filter(!is.na(Z_jobfamily))
+  position %>% group_by(Z_cmguserid) %>% filter(!is.na(Z_position)) %>% top_n(1, n) 
 
 data <-
-  data %>% left_join(position, by = "Z_position") %>%
-  mutate(Z_jobfamily.x = ifelse(is.na(Z_jobfamily.x), Z_jobfamily.y, Z_jobfamily.x))
-data$Z_jobfamily.y <- NULL
+  data %>% left_join(position, by = "Z_cmguserid") %>%
+  mutate(Z_position.x = ifelse(is.na(Z_position.x), Z_position.y, Z_position.x))
+data$Z_position.y <- NULL
 data$n <- NULL
-data <- data %>% dplyr::rename( Z_jobfamily = Z_jobfamily.x)
+data <- data %>% dplyr::rename( Z_position = Z_position.x)
+
+#Fill the missing resolved_by_id with the most frequent value of resolved_by
+resolver <- 
+  data %>% group_by(resolved_by, resolved_by_id) %>% dplyr::summarise(n = n())
+
+resolver <-
+  resolver %>% group_by(resolved_by) %>% filter(!is.na(resolved_by_id)) %>% top_n(1, n) 
+
+data <-
+  data %>% left_join(resolver, by = "resolved_by") %>%
+  mutate(resolved_by_id.x = ifelse(is.na(resolved_by_id.x), resolved_by_id.y, resolved_by_id.x))
+data$resolved_by_id.y <- NULL
+data$n <- NULL
+data <- data %>% dplyr::rename( resolved_by_id = resolved_by_id.x)
+
+temp <-
+data %>% filter(is.na(resolved_by_id))
+
+temp <-
+data %>% filter(resolved_by == "Dinesh Kambam")
 
 ##Missing value only for internal emplyee 
 #Y_country 28707 -> 10869 -> 9559
@@ -216,7 +291,7 @@ n3 <- nrow(temp)
 NAcols3
 #temp %>% distinct(Y_cmg_shortname) #Y_cmg_shortname 활용 가능?
 
-aggr(temp[,c("Y_locationname", "Y_location_id", "Y_country", "Y_cmgnumber", "Y_timezone", "location.u_cmg.u_cmgcmgofficialname")], 
+aggr(temp[,c("Y_locationname", "Y_location_id", "Y_country", "Y_cmgnumber", "Y_timezone", "Y_cmg_shortname", "Z_cmguserid")], 
      prop = FALSE, combined = TRUE, numbers = TRUE, sortVars = TRUE, sortCombs = TRUE) 
 
 #Fill the missing BSID with the most frequent value of assignment_Group
@@ -225,7 +300,9 @@ BSID <-
   data %>% group_by(assignment_grp, X_bs_id) %>% dplyr::summarise(n = n())
 
 BSID <-
-  BSID %>% group_by(assignment_grp) %>% top_n(1, n) %>% filter(!is.na(X_bs_id))
+  BSID %>% group_by(assignment_grp) %>% filter(!is.na(X_bs_id), !is.na(assignment_grp)) %>% top_n(1, n)
+
+BSID %>% filter(assignment_grp == "BT-LL_BREL LIMS")
 
 data <-
   data %>% left_join(BSID, by = "assignment_grp") %>%
@@ -249,11 +326,18 @@ data %>% filter(str_detect(assignment_grp, "SIAL") | str_detect(X_service_compon
 
 
 #Fill the missing BSID with the most frequent value of IT engineer
+aggr(temp[,c("resolved_by_id", "X_bs_id", "assignment_grp")], 
+     prop = FALSE, combined = TRUE, numbers = TRUE, sortVars = TRUE, sortCombs = TRUE) 
+
+
 BSID <- 
   data %>% group_by(resolved_by_id, X_bs_id) %>% dplyr::summarise(n = n())
 
 BSID <-
-  BSID %>% group_by(resolved_by_id) %>% top_n(1, n) %>% filter(!is.na(resolved_by_id)) %>% filter(!is.na(X_bs_id)) %>% filter(n > 1)
+  BSID %>% group_by(resolved_by_id) %>% filter(!is.na(resolved_by_id)) %>% filter(!is.na(X_bs_id)) %>% top_n(1, n) %>% filter(n > 1)
+
+temp %>% filter(resolved_by_id == "M235280") %>% 
+  group_by(resolved_by_id) %>% filter(!is.na(resolved_by_id)) %>% filter(!is.na(X_bs_id)) %>% top_n(1, n) %>% filter(n > 1)
 
 data <-
   data %>% left_join(BSID, by = "resolved_by_id") %>%
@@ -302,27 +386,46 @@ corHigh <- names(which(apply(cor_sorted, 1, function(x) abs(x)> 0.5)))
 cor_numVar <- cor_numVar[corHigh,corHigh]
 corrplot.mixed(cor_numVar, tl.col ="black",tl.pos="lt")
 
-####################################################################################
-#convert seconds to to hours, days
-library(lubridate)
 
-Nweekdays(as.Date("2019-12-07"), as.Date("2019-12-08"))
+####################################################################################
+#function to get workdays only excluding weekends between dates
+#options(error = recover)
+#library(lubridate)
+Nweekdays(as.Date("2018-06-30"), as.Date("2018-07-01"))
+
 Nweekdays <- function(a,b)
 {
-  ifelse(is.na(a)|is.na(b), return(0), 
-         dates <- as.numeric((as.Date(a,"%m/%d/%y")):(as.Date(b,"%m/%d/%y"))) 
-         return(sum(dates%%7%in%c(2,3))))
-}
-Nweekdays <- function(a,b)
-{
-  dates <- as.numeric(a:b)
-  return(sum(dates%%7%in%c(2,3)))
-}
+  if(is.na(a) | is.na(b))
+  { v_days <- 0  }
+  else {
+    v_start <- unclass(a)
+    v_end <- unclass(b)
+    v_dates <- seq(v_start, v_end, 1)
+    v_days <- sum(v_dates%%7%in%c(2,3))
+    v_check <- as.integer(b - a) - v_days
+    v_days <- ifelse(v_check > 0, v_check, 0)
+  }
+  return(v_days)
+}  
+####################################################################################
+
+data$created_on2 <- NULL
+data$resolved2 <- NULL
+data$weekdays <- NULL
 
 data <- data %>% 
-  mutate(created_on2 = substr(created_on, 1,10), 
-         resolved2   = substr(resolved, 1,10), 
-         weekdays    = Nweekdays(as.Date(created_on2), as.Date(ifelse(is.na(resolved2),created_on2,resolved2)))) %>%
+  mutate(created_on2 = as.Date(substr(created_on, 1,10)), 
+         resolved2   = as.Date(substr(resolved, 1,10)))
+
+
+args1 <- list(data$created_on2, data$resolved2)
+args1 <-
+  args1 %>% pmap(Nweekdays)
+args1 <- unlist(args1)
+data$weekdays <- args1
+
+
+data <- data %>% 
   mutate( LT_day = round( ifelse(business_duration == calendar_duration & calendar_duration >0, (business_duration / 3600 / 24) - weekdays, business_duration / 3600 / 8), digits = 2),
         LT_hour = round( ifelse(business_duration == calendar_duration & calendar_duration >0, (business_duration / 3600 / 3) - weekdays * 8 , business_duration / 3600), digits = 2) ) %>%
   mutate( LT_day = ifelse(business_duration == 0 & calendar_duration >0, round((calendar_duration / 3600 / 24) - weekdays, digits = 2), LT_day),
@@ -334,6 +437,7 @@ data <- data %>%
           LT_in_time = ifelse(LT_day < 5, 1, 0),   # resolved_in_time < 5 days
           LT_ATOP = ifelse(LT_day < 3, 1, 0),               # resolved_in_time < 3 days
           reopen = ifelse(reopen_count > 0, 1, ifelse(is.na(reopen_count),0,0)),
+          reassign = ifelse(reassignment_cnt > 2, 1, ifelse(is.na(reassignment_cnt),0,0)),
           u_FTR2 = ifelse(is.na(u_FTR), 0, ifelse(u_FTR == "Yes", 1, 0)),
           backlog = ifelse(LT_day > 5 & state %in% c("Work In Progress", "Pending", "Assigned"), 1, 0), # >5 days & not resolved  
           state2 = ifelse(backlog == 1, "Backlog", ifelse(state %in% c("Open", "Work In Progress", "Pending", "Assigned"), "Progressing", 
@@ -341,7 +445,8 @@ data <- data %>%
           request_div = substr(Y_cmg_shortname,1,2), 
           yyyymm = as.Date(str_c(substr(created_on, 1,7), "-01")),
           yyyymm_resolved = as.Date(str_c(substr(resolved, 1,7), "-01")))
-          
+
+
 # data check Y_cmg_shortname and pick up first 2 digits -> request_div
 data %>% group_by(Y_cmg_shortname, Y_cmg_longname) %>% dplyr::summarise(n = n())
 
@@ -352,11 +457,9 @@ data %>% filter(state2 == "Progressing", !is.na(resolved))
 data %>% filter(state2 == "Backlog", !is.na(resolved)) 
 
 #data check Y_location_id as it has some characters in the value
-temp <- data %>% filter(number == "INC2080286")
-filter(sapply(data[, "Y_location_id"], is.character))
 data <-
   data %>% mutate( Y_location_id = substr(Y_location_id,1,6))
-
+dim(data)
 data %>% write_csv("all_incidents.csv", na = "")
 #power BI에서 특수문자의 경우 에러 발생, 확인 필요
 #data$short_desc2 <- str_replace_all(data2$short_desc, "[?<>+]", "99")
@@ -383,20 +486,112 @@ data %>% filter(!is.na(resolved), LT_hour >0, !is.na(Y_cmg_shortname) | request_
 data %>% filter(!is.na(resolved), LT_hour >=10, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_freqpoly(binwidth = 5) + xlim(10, 80)
 data %>% filter(!is.na(resolved), LT_hour >=0,  !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(ERP, LT_hour)) + geom_boxplot() + ylim(0, 240) #30 days
 
+temp <-
+data %>% filter(str_detect(assignment_grp, "BT-LL_B")) 
+
+
 ####################################################################################
 # Read BSID data downloaded on 2019-12-09, filtered by approved status only 
 
-BS_data <- read_csv("u_cmdb_ci_service_2019.csv")
+BS_data <- read_csv("u_cmdb_ci_service_2019v2.csv")
 
 BS_data %>% filter(!is.na(u_bs_id), substr(u_approval_status, 1,8) == "approved") %>% 
   group_by(u_bs_id) %>% dplyr::summarise(n = n()) %>%
   filter(n >= 2)
 
 BS_data %>% filter(!is.na(u_bs_id), substr(u_approval_status, 1,8) == "approved") %>% 
-  group_by(u_bs_id) %>% top_n(1, u_version) %>% write_csv("BSD_201912.csv")
+  group_by(u_bs_id) %>% top_n(1, u_version) %>% write_csv("BSD_201912.csv", na = "")
+
+BS_data %>% filter(u_bs_id == "BS_2257")
 
 ####################################################################################
 
 temp1 <- temp %>% distinct(Z_employeetype)
 rm(temp)
 quantile(temp$LT_hour)
+
+####################################################################################
+### Data update
+temp <- read_csv("C:/temp/Rtest/IT_request/update/incident/incident_update_201809_201910.csv", 
+                 locale = locale(encoding = "UTF-8"),
+                 col_types = cols(
+                   .default = col_character(),
+                   sys_created_on = col_character(),
+                   resolved_by.user_name = col_character(),
+                   reassignment_count = col_number(),
+                   reopen_count = col_number(),
+                   business_duration = col_number(),
+                   calendar_duration = col_number(),
+                   due_date = col_character(),
+                   u_erp_related = col_character(),
+                   business_stc = col_number(),
+                   caller_id.u_cmgleavingdate = col_datetime(format = ""),
+                   caller_id.u_cmgjoiningdate = col_date(format = ""),
+                   location.u_location_id = col_character(),
+                   location.u_cmg.u_cmgcmgnumber = col_character()))
+colnames(temp)
+
+temp <- temp %>% dplyr::rename(
+  number             	=	number,                                                     
+  created_by         	=	sys_created_by,                                             
+  created_on         	=	sys_created_on,                                            
+  reactivation_time  	=	u_reactivation_time,                                        
+  closed_at          	=	closed_at,                                                  
+  closed_by          	=	closed_by,                                                  
+  state              	=	state,                                                      
+  short_desc         	=	short_description,                                          
+  assigned_to        	=	assigned_to,                                                
+  assignment_grp     	=	assignment_group,                                           
+  urgency            	=	urgency,                                                    
+  opened_by          	=	opened_by,                                                  
+  updated_on         	=	sys_updated_on,                                             
+  updated_by         	=	sys_updated_by,                                            
+  resolved           	=	resolved_at,                                                 
+  resolved_by        	=	resolved_by,          
+  u_FTR               = u_first_time_right_assignment_1,
+  u_location          = u_ci_location,
+  u_erp               = u_erp_related,
+  resolved_by_id      = resolved_by.user_name,
+  calendar_duration  	=	calendar_duration,                                          
+  due_date           	=	due_date,                                                   
+  business_duration  	=	business_duration,                                          
+  reassignment_cnt   	=	reassignment_count,                                         
+  X_service_component	=	u_service_component,                                        
+  incident_type      	=	u_incident_type,                                            
+  X_bs_id            	=	u_matrix.u_bs_id,                                           
+  X_bs_name          	=	u_matrix.u_bs_name,                                         
+  Y_country_code     	=	location.u_cmg.u_cmgcmgnumber,                                    
+  Y_country          	=	location.u_cmg.u_cmgcountryname,                                           
+  Y_location_id      	=	location.u_location_id,                                     
+  Y_locationname    	=	location.name,                                              
+  Y_cmg_shortname		=	caller_id.u_cmgglobalidentifiershortname,
+  Y_cmg_longname 		=	caller_id.u_cmgglobalidentifierlongname, 
+  Y_cmg_unitname   		=	caller_id.u_cmgorganizationalunitname,   
+  Z_position         	=	caller_id.u_cmgposition,                 
+  Z_jobfamily        	=	caller_id.u_cmgjobfamily,                
+  Z_employeetype     	=	caller_id.u_employeetype,                
+  Z_cmguserid        	=	caller_id.user_name,                   
+  Z_user_name        	=	caller_id.name,                          
+  Z_user_joindate    	=	caller_id.u_cmgjoiningdate,              
+  Z_user_leavedate   	=	caller_id.u_cmgleavingdate,              
+  Y_region           	=	location.parent.u_region,                                   
+  Y_cmgnumber     		=	location.u_cmg.u_cmgcmgnumber,    
+  Y_cmgofficialname		=	location.u_cmg.u_cmgcmgofficialname,
+  Y_timezone         	=	location.parent.u_region)
+
+temp <- as_tibble(temp)
+
+temp <- 
+  temp %>% 
+  filter(created_by != "midserver" ) %>%
+  filter(created_by != "guest"  )
+
+temp1 <- temp %>% select(number)
+
+NROW(data)
+data <- data %>% anti_join(temp1) 
+data <- rbind.fill(data, temp)
+rm(temp1)
+
+####################################################################################
+### new Data insert
