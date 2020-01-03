@@ -11,7 +11,7 @@ and develop the model to predict the potential long-time resolution incident
 
 ## Data exploration
 
-The data consist of `r n1` rows and `r ncol(data)` columns.
+The data consist of `r n1` rows and r c1 columns.
 Let's review the sample data
 
 ```{r, echo=FALSE}
@@ -20,75 +20,86 @@ knitr::kable(
 )
 ```
 
-There are many data created by the system, it is likely that this is caused by some background schedule.
-This will make the model more complicate, thus in this analysis we will delete the data not created by the users
+There are many data created by the system automatically, it is likely to be caused by some background automatic schedule.
+This will make the analysis more complicate, thus in this analysis we will delete the data not created by the users
 
 ```{r 00110, echo=FALSE}
 cat("Incident data is creatd by midserver or guest:", comma(n1-n2,digits=0), 
-    "out of", comma(n1,digits=0), ",", round((n1-n2)/n1*100), "%")
+    "out of", comma(n1,digits=0), ",", round((n1-n2)/n1*100), "% deleted from the data")
 ```
 
+* Resolution Lead Time (LT_day)
 The first thing is to check the objective value which is resolution lead time.
-Let's see the density graph with the variable of Resolution Lead Time(RLT). 
+Let's see the density graph with the variable of Resolution Lead Time(RLT)
+and many incidents can be observed over 10, 20 even 40 RLT days.     
 
-Most of RLT is within 5 days, but still RLT of many incidents can be seen over 10, 20 even 40 days.     
-
-* LT_day is converted variable from business_duration whose UOM is a second, excluding weekend and pending time
+* LT_day is converted feature from business_duration whose UOM is a second excluding weekend and pending time, this requires to convert to a business work day
 ```{r 00115, echo=FALSE}
 data %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60))
 
 ```
 
-5% of data is over 20 days RLT
+According to RLT distribution, 90% of data is within 5 days lead time, 95% within 20 days, and 99% within 60 days.
+And over 99% of data has more than 90 days, it seems to be outlier, or abandoned request 
+
 ```{r 00116, echo=FALSE}
 quantile( filter(data, !is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day, probs = c(0.5, 0.75, 0.8, 0.9, 0.93, 0.95,0.96, 0.97, 0.98, 0.99 , 0.996 ,1))
 ```
 
+To check RLT value with other features, tickets reassigned more than 3 times or reopened has high density around 8 days. 
+And FTR show high density on 1, 2 days RLT.
+Later it will validate how much they are corelated to RLT 
+* Question, in which area is FTR high and why?
 
-#Data distribution review
-data %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60))
-summary(data$LT_day)
-quantile(data$LT_day, probs = c(0.5, 0.75, 0.8, 0.9, 0.93, 0.95, 0.97, 0.98, 0.99 ,1),na.rm = FALSE)
+```{r 00117, echo=FALSE}
+s1 <-
+data %>% filter(reassign == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
+  ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60)) + 
+  ggtitle("RLT distribution with features", subtitle = "Reassigned >=3")
 
-temp <-
-data %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT")
-quantile(temp$LT_day, probs = c(0.5, 0.75, 0.8, 0.9, 0.93, 0.95,0.96, 0.97, 0.98, 0.99 ,1))
+s2 <-
+data %>% filter(reopen == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
+  ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60)) +
+  ggtitle("",subtitle = "Reopened")
+  
+s3 <-
+data %>% filter(u_FTR2 == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
+  ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60)) + 
+  ggtitle("",subtitle = "FTR supported")
 
-data %>% filter(reassign == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60))
-data %>% filter(reopen == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60))
-data %>% filter(u_FTR2 == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60))
-
-data %>% unique(reassignment_cnt)
-data %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=reassignment_cnt)) + scale_x_log10(breaks = c(0,1, 2,3,4,5, 10, 20, 30, 40, 60))
-data %>% filter(reassign == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_point(aes(reassignment_cnt, LT_day ))
-
-
-
-
-If business_duration is equal to calendar_duration, SNOW calculates a day with 24 hours, not eight work hours, and also include the weekend.
-This error is obvious when calendar_duration has a high number, i.e.,>= 60 hours (216000)
-
-```{r 00120, echo=FALSE}
-data %>% filter(business_duration == calendar_duration, calendar_duration >= 216000 , !is.na(resolved)) %>% select(number, created_on, resolved, calendar_duration) %>% arrange(desc(created_on))
+grid.arrange(s1, s2, s3, widths=1)
 ```
 
-Every month, more than 7% out of created incidents is the case of business_duration == calendar_duration, it needs to consider when lead time is calculated
-```{r, echo=FALSE}
-data %>% mutate(NG = ifelse(business_duration == calendar_duration, 1,0), 
+Here. there are some abnormal findings that RLT is quite short but duration in the calendar is very long.
+This account for 3% of the data, and need to check the gap why it occurs.
+Let's see the trend of the gap between RLT and calendar period.
+In the distribution around 8~18 days gap is considerably high. 
+
+```{r 00118, echo=FALSE}
+data %>% filter(abs(LT_day-weekdays) > 5) %>%
+  ggplot() + geom_density(aes(x=LT_day-weekdays)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60, 300))
+```
+
+For example, #INC1854118 has 3 hours RLT but actual number of days from the opening to reslove in the calendar is 71 days.
+It needs to indentify the root cause of this result.
+
+```{r 00119, echo=FALSE}
+data %>% filter(number %in% c("INC1854118", "INC2029235", "INC2019483")) %>% select(number, created_on2, resolved2, business_duration, weekdays)
+```
+
+Another interesting finding is that if business_duration is equal to calendar_duration, SNOW calculates a day with 24 hours, not eight work hours, and also include the weekend.
+This error is obvious when calendar_duration has a high number, i.e.,>= 20 hours (72000)
+This need to check why it has big gap to calculate the lead time in what kind of condition since this may cause disagreement between business and IT
+
+```{r 00120, echo=FALSE}
+data %>% mutate(NG = ifelse(business_duration == calendar_duration & calendar_duration >= 72000 & !is.na(resolved), 1,0), 
                 yyyymm = as.Date(str_c(substr(created_on, 1,7), "-01"))) %>% 
   group_by(yyyymm) %>% dplyr::summarise(wrong_duration = sum(NG), total = n(), percent = comma(wrong_duration/total*100)) %>% arrange(desc(yyyymm))
 
 ```
 
-Let's check the distribution of resolution lead time, most of the data are less than 10 days
-But, also many data took more than 30 days to resolve the incidents
-```{r, echo=FALSE}
-data %>% filter(!is.na(resolved)) %>% ggplot(aes(business_duration/3600/8)) + geom_histogram(binwidth = 1, na.rm = TRUE) + xlim(0, 40)
-data %>% filter(!is.na(resolved)) %>% ggplot(aes(business_duration/3600/8)) + geom_histogram(binwidth = 1, na.rm = TRUE) + xlim(30, 60)
-```
-
-# Missing value handling
-Check missing values in the dataset
+## Missing value handling {.tabset}
+Check missing values in the data
 
 ```{r 00130, echo=FALSE}
 NAcol <- which(colSums(is.na(data))>0)
@@ -96,9 +107,7 @@ NAcols <- sort(colSums(sapply(data[NAcol],is.na)), decreasing = T)
 NAcols
 ```
 
-##Missing value imputation {.tabset}
-
-###locationname
+### Locationname
 **country missing value is reduced to 10,869, this is due to no location info**
 
 ```{r, include=FALSE}
@@ -116,7 +125,7 @@ data$Country <- NULL
 
 after imputation, missing country data is reduced 62%, (28707 -> 10974)
 
-###region
+### Region
 **Fill the missing region data with the most frequent value**
 
 ```{r, include=FALSE}
@@ -143,7 +152,7 @@ data <- data %>% dplyr::rename( Y_timezone = Y_timezone.y)
 
 after imputation, missing region data is reduced 93%, (151592 -> 10974)
 
-###jobfamily
+### Jobfamily
 **Fill the missing jobfamily with the most frequent value of userid**
 
 ```{r, include=FALSE}
