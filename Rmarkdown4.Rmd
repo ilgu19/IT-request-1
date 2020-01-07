@@ -5,7 +5,7 @@ output: html_notebook
 
 # Background
 
-It is IT incident data downloaded in the Servicenow, SNOW between 2018-09-01 to 2019-11-30, last refreshed at 2019-12-01.
+It is IT incident data downloaded in the Servicenow, SNOW between 2018-09-01 to 2019-12-31, last refreshed at 2020-01-03.
 Resolution lead time is the dependent variable and is going to analyze the independent data what main factors delay the time, 
 and develop the model to predict the potential long-time resolution incident 
 

@@ -22,174 +22,10 @@ data2 %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved), request_div !
   dplyr::summarise(Miss_BSD = sum(is.na(X_bs_id)), Not_Miss_BSD = sum(!is.na(X_bs_id)), 
                    all_biz_resolved_incidents = Miss_BSD+Not_Miss_BSD, Miss_BSD/(Miss_BSD+Not_Miss_BSD)*100)
 
-###################################################################################
-
-#Fill the missing Y_cmg_short/long name data2 with the most frequent value of Y_cmg_unitname, after imputation it reduced from 115,228 to 19,155
-cmg_name <- 
-  data2 %>% group_by(Y_cmg_unitname, Y_cmg_shortname, Y_cmg_longname) %>% dplyr::summarise(n = n()) 
-
-cmg_name <-
-  cmg_name %>% group_by(Y_cmg_unitname) %>% filter(!is.na(Y_cmg_shortname) & !is.na(Y_cmg_longname)) %>% top_n(1, n) 
-#cmg_name %>% filter(Y_cmg_unitname == "T-IOW-S EUS Switzerland West")
-
-data2 <-
-  data2 %>% left_join(cmg_name, by = "Y_cmg_unitname") %>%
-  mutate(Y_cmg_shortname.x = ifelse(is.na(Y_cmg_shortname.x), Y_cmg_shortname.y, Y_cmg_shortname.x),
-         Y_cmg_longname.x = ifelse(is.na(Y_cmg_longname.x), Y_cmg_longname.y, Y_cmg_longname.x))
-data2$Y_cmg_shortname.y <- NULL
-data2$Y_cmg_longname.y <- NULL
-data2$n <- NULL
-data2 <- data2 %>% dplyr::rename( Y_cmg_shortname = Y_cmg_shortname.x,
-                                  Y_cmg_longname = Y_cmg_longname.x)
-
-
-# Again, fill the missing Y_cmg_short/long name with the most frequent value of Y_locationname, after imputation it reduced from 19,155 to 12
-cmg_name <- 
-  data2 %>% group_by(Y_locationname, Y_cmg_shortname, Y_cmg_longname) %>% dplyr::summarise(n = n()) 
-
-cmg_name <-
-  cmg_name %>% group_by(Y_locationname) %>% filter(!is.na(Y_cmg_shortname) & !is.na(Y_cmg_longname)) %>% top_n(1, n) 
-#cmg_name %>% filter(Y_cmg_unitname == "T-IOW-S EUS Switzerland West")
-
-data2 <-
-  data2 %>% left_join(cmg_name, by = "Y_locationname") %>%
-  mutate(Y_cmg_shortname.x = ifelse(is.na(Y_cmg_shortname.x), Y_cmg_shortname.y, Y_cmg_shortname.x),
-         Y_cmg_longname.x = ifelse(is.na(Y_cmg_longname.x), Y_cmg_longname.y, Y_cmg_longname.x))
-data2$Y_cmg_shortname.y <- NULL
-data2$Y_cmg_longname.y <- NULL
-data2$n <- NULL
-data2 <- data2 %>% dplyr::rename( Y_cmg_shortname = Y_cmg_shortname.x,
-                                  Y_cmg_longname = Y_cmg_longname.x)
-
 ##################################################################################################
+#external employee 의 추의를 확인해 볼 필요가 있다... 중요한 idea!!!  지역 정보를 가지고 있고 대부분의 인사 정보를 가지고 있음
+data %>% filter(Z_employeetype == "External")  #530,884 for Employee / 118,434 for External / total 650,610
 
-aggr(data2[,c("Z_jobfamily", "Z_position", "Y_country", "Z_cmguserid")], 
-     prop = FALSE, combined = TRUE, numbers = TRUE, sortVars = TRUE, sortCombs = TRUE) 
-
-#Fill the missing position with the most frequent value of userid, , after imputation it reduced from 114,759 to 114,753
-position <- 
-  data2 %>% group_by(Z_cmguserid, Z_position) %>% dplyr::summarise(n = n())
-
-position <-
-  position %>% group_by(Z_cmguserid) %>% filter(!is.na(Z_position)) %>% top_n(1, n) 
-
-data2 <-
-  data2 %>% left_join(position, by = "Z_cmguserid") %>%
-  mutate(Z_position.x = ifelse(is.na(Z_position.x), Z_position.y, Z_position.x))
-data2$Z_position.y <- NULL
-data2$n <- NULL
-data2 <- data2 %>% dplyr::rename( Z_position = Z_position.x)
-
-
-#Fill the missing jobfamily with the most frequent value of userid, after imputation it reduced from 126,304 to 126,027
-#Still many null data2 in jobfamily, position this is because incidents were requested by XUID externals who don't have jobfamily, position in HR suites
-#data2 %>% filter(substr(Z_cmguserid,1,1) != "M" | is.na(resolved)) 
-data2 %>% group_by(Z_jobfamily) %>% distinct(Z_jobfamily)
-data2 %>% group_by(Z_position) %>% distinct(Z_position)
-
-jobfamily <- 
-  data2 %>% group_by(Z_cmguserid, Z_jobfamily) %>% dplyr::summarise(n = n()) 
-
-jobfamily <-
-  jobfamily %>% group_by(Z_cmguserid) %>% filter(!is.na(Z_jobfamily)) %>% top_n(1, n)
-
-data2 <-
-  data2 %>% left_join(jobfamily, by = "Z_cmguserid") %>%
-  mutate(Z_jobfamily.x = ifelse(is.na(Z_jobfamily.x), Z_jobfamily.y, Z_jobfamily.x))
-data2$Z_jobfamily.y <- NULL
-data2$n <- NULL
-data2 <- data2 %>% dplyr::rename( Z_jobfamily = Z_jobfamily.x)
-
-NAcol <- which(colSums(is.na(data2))>0)
-NAcols2 <- sort(colSums(sapply(data2[NAcol],is.na)), decreasing = T)
-
-#Fill the missing jobfamily with the most frequent value of position
-# position <- 
-#   data2 %>% group_by(Z_position, Z_jobfamily) %>% dplyr::summarise(n = n())
-# 
-# position <-
-#   position %>% group_by(Z_position) %>% filter(!is.na(Z_jobfamily)) %>% top_n(1, n) 
-# 
-# data2 <-
-#   data2 %>% left_join(position, by = "Z_position") %>%
-#   mutate(Z_jobfamily.x = ifelse(is.na(Z_jobfamily.x), Z_jobfamily.y, Z_jobfamily.x))
-# data2$Z_jobfamily.y <- NULL
-# data2$n <- NULL
-# data2 <- data2 %>% dplyr::rename( Z_jobfamily = Z_jobfamily.x)
-
-
-##################################################################################################
-
-aggr(data2[,c("resolved_by_id", "resolved_by", "X_bs_id", "assignment_grp")], 
-     prop = FALSE, combined = TRUE, numbers = TRUE, sortVars = TRUE, sortCombs = TRUE) 
-
-#Fill the missing resolved_by_id with the most frequent value of resolved_by, after imputation it reduced from 99,968 to 9,589
-resolver <- 
-  data2 %>% group_by(resolved_by, resolved_by_id) %>% dplyr::summarise(n = n())
-
-resolver <-
-  resolver %>% group_by(resolved_by) %>% filter(!is.na(resolved_by_id)) %>% top_n(1, n) 
-
-data2 <-
-  data2 %>% left_join(resolver, by = "resolved_by") %>%
-  mutate(resolved_by_id.x = ifelse(is.na(resolved_by_id.x), resolved_by_id.y, resolved_by_id.x))
-data2$resolved_by_id.y <- NULL
-data2$n <- NULL
-data2 <- data2 %>% dplyr::rename( resolved_by_id = resolved_by_id.x)
-
-temp <-
-  data2 %>% filter(is.na(resolved_by_id))
-
-temp <-
-  data2 %>% filter(resolved_by == "Dinesh Kambam")
-
-#Fill the missing BSID with the most frequent value of assignment_Group, after imputation it reduced from 82,261 to 68
-data2 %>% group_by(X_bs_id) %>% distinct(X_bs_id)
-
-BSID <- 
-  data2 %>% group_by(assignment_grp, X_bs_id) %>% dplyr::summarise(n = n())
-
-BSID <-
-  BSID %>% group_by(assignment_grp) %>% filter(!is.na(X_bs_id)) %>% arrange(assignment_grp, desc(n)) %>% top_n(1, n)
-
-BSID %>% filter(assignment_grp == "BT-LL_BREL LIMS")
-
-data2 <-
-  data2 %>% left_join(BSID, by = "assignment_grp") %>%
-  mutate(X_bs_id.x = ifelse(is.na(X_bs_id.x), X_bs_id.y, X_bs_id.x))
-data2$X_bs_id.y <- NULL
-data2$n <- NULL
-data2 <- data2 %>% dplyr::rename( X_bs_id = X_bs_id.x)
-
-#Fill the missing BSID with the most frequent value of resolved_by_id, after imputation it reduced from 68 to 36
-BSID <- 
-  data2 %>% group_by(resolved_by_id, X_bs_id) %>% dplyr::summarise(n = n())
-
-BSID <-
-  BSID %>% group_by(resolved_by_id) %>% filter(!is.na(X_bs_id)) %>% arrange(resolved_by_id, desc(n)) %>% top_n(1, n) 
-
-data2 <-
-  data2 %>% left_join(BSID, by = "resolved_by_id") %>%
-  mutate(X_bs_id.x = ifelse(is.na(X_bs_id.x), X_bs_id.y, X_bs_id.x))
-data2$X_bs_id.y <- NULL
-data2$n <- NULL
-data2 <- data2 %>% dplyr::rename( X_bs_id = X_bs_id.x)
-
-##################################################################################################
-#final result after null imputation
-NAcol2 <- which(colSums(is.na(data2))>0)
-NAcols2 <- sort(colSums(sapply(data2[NAcol2],is.na)), decreasing = T)
-
-#only for incidents requested by merck imployee
-temp <-
-  data2 %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved)) 
-
-NAcol3 <- which(colSums(is.na(temp))>0)
-NAcols3 <- sort(colSums(sapply(temp[NAcol3],is.na)), decreasing = T)
-
-rm(country, country_location, jobfamily, position, region, resolver, BSID, BS_data2, temp, cmg_name, skimmed, args1, Charcol, Numcol, file_name)
-
-##################################################################################################
 ##################################################################################################
 #Regarding resolution lead time calculation in Service now there is some miscalculation when business_duration is equal to calendar_duration
 #SNOW calculates a day with 24 hours, not eight work hours, and also include the weekend.
@@ -232,27 +68,28 @@ Nweekdays <- function(a,b)
 #Sample
 Nweekdays(as.Date("2018-11-06"), as.Date("2018-11-07"))
 ####################################################################################
-
+# Data3 Convert value calculation 
+#
 data2$created_on2 <- NULL
 data2$resolved2 <- NULL
 data2$weekdays <- NULL
 
-data2 <- data2 %>% 
+data3 <- data2 %>% 
   mutate(created_on2 = as.Date(substr(created_on, 1,10)), 
          resolved2   = as.Date(substr(resolved, 1,10)))
 
-args1 <- list(data2$created_on2, data2$resolved2)
+args1 <- list(data3$created_on2, data3$resolved2)
 args1 <-
   args1 %>% pmap(Nweekdays)
 args1 <- unlist(args1)
-data2$weekdays <- args1
+data3$weekdays <- args1
 
 
 #  mutate( LT_day = round( ifelse(business_duration == calendar_duration & calendar_duration >0, (business_duration / 3600 / 24) - weekdays, business_duration / 3600 / 8), digits = 2),
 #          LT_hour = round( ifelse(business_duration == calendar_duration & calendar_duration >0, (business_duration / 3600 / 3) - weekdays * 8 , business_duration / 3600), digits = 2) ) %>%
 #  mutate( LT_day = ifelse(business_duration == 0 & calendar_duration >0, round((calendar_duration / 3600 / 24) - weekdays, digits = 2), LT_day),
 #          LT_hour = ifelse(business_duration == 0 & calendar_duration >0, round((calendar_duration / 3600 / 3) - weekdays* 8, digits = 2), LT_hour),
-data2 <- data2 %>% 
+data3 <- data3 %>% 
   mutate( LT_day = round( business_duration / 3600 / 8, digits = 2),
           LT_hour = round( business_duration / 3600, digits = 2), 
           LT10_20 = ifelse(LT_day > 10 & LT_day <= 20 ,1,0),
@@ -272,55 +109,75 @@ data2 <- data2 %>%
           yyyymm_resolved = as.Date(str_c(substr(resolved, 1,7), "-01")))
 
 #assigned_to가 null 이면 calculation이 안됨 => 수정 조치 꼭 필요
-data2 %>% filter(is.na(assigned_to)) %>% dplyr::count(yyyymm) 
-filter(data2, LT_day < 0)
-data2 %>% filter(business_duration == calendar_duration & calendar_duration >0) %>% dplyr::count(yyyymm) 
-data2 %>% filter(business_duration == 0 & calendar_duration >0) %>% dplyr::count(yyyymm) 
-data2 %>% filter(abs(weekdays - LT_day)>=10) %>% dplyr::count(yyyymm) 
+data3 %>% filter(is.na(assigned_to)) %>% dplyr::count(yyyymm) 
+filter(data3, LT_day < 0)
+data3 %>% filter(business_duration == calendar_duration & calendar_duration >0) %>% dplyr::count(yyyymm) 
+data3 %>% filter(business_duration == 0 & calendar_duration >0) %>% dplyr::count(yyyymm) 
+data3 %>% filter(abs(weekdays - LT_day)>=10) %>% dplyr::count(yyyymm) 
 #user의 관점에서 dashboard 필요
 
-#data2 <- data2 %>% mutate( LT_day = round( business_duration / 3600 / 8, digits = 2),
+#data3 <- data3 %>% mutate( LT_day = round( business_duration / 3600 / 8, digits = 2),
 #        LT_hour = round( business_duration / 3600, digits = 2) )
 
-#data2 check Y_location_id as it has some characters in the value
-data2 <-
-  data2 %>% mutate( Y_location_id = substr(Y_location_id,1,6))
-dim(data2)
+#data3 check Y_location_id as it has some characters in the value
+data3 <-
+  data3 %>% mutate( Y_location_id = substr(Y_location_id,1,6))
+dim(data3)
 
-data2 %>% write_csv("all_incidents.csv", na = "")
+data3 %>% write_csv("all_incidents.csv", na = "")
 
 temp <-
-  data2 %>% filter(assignment_grp == "AP_SOUTH KOREA-SEOUL_FIELDSUPPORT" | 
+  data3 %>% filter(assignment_grp == "AP_SOUTH KOREA-SEOUL_FIELDSUPPORT" | 
                      assignment_grp == "AP_SOUTH KOREA-SEOUL_LOCAL ADMIN") %>%
   group_by(X_bs_id) %>% dplyr::summarise(n = n())
 
 temp <-
-  data2 %>% filter(assignment_grp == "AP_SOUTH KOREA-SEOUL_FIELDSUPPORT" | 
+  data3 %>% filter(assignment_grp == "AP_SOUTH KOREA-SEOUL_FIELDSUPPORT" | 
                      assignment_grp == "AP_SOUTH KOREA-SEOUL_LOCAL ADMIN") %>% 
   group_by(X_bs_id) %>% dplyr::summarize(n=n())
+
+####################################################################################
+# Read BSID data3 downloaded on 2019-12-09, filtered by approved status only 
+
+BS_Master <- read_csv("BSD_201912.csv")
+BS_Master %>% distinct(u_bs_id)
+temp <-
+  data3 %>% left_join(BS_Master, by = c("X_bs_id" = "u_bs_id"))
+rm(temp)
+
+BS_data3 <- read_csv("u_cmdb_ci_service_2019v2.csv")
+
+BS_data3 %>% filter(!is.na(u_bs_id), substr(u_approval_status, 1,8) == "approved") %>% 
+  group_by(u_bs_id) %>% dplyr::summarise(n = n()) %>%
+  filter(n >= 2)
+
+BS_data3 %>% filter(!is.na(u_bs_id), substr(u_approval_status, 1,8) == "approved") %>% 
+  group_by(u_bs_id) %>% top_n(1, u_version) %>% write_csv("BSD_201912.csv", na = "")
+
+BS_data3 %>% filter(u_bs_id == "BS_2257")
 ####################################################################################
 
 #power BI에서 특수문자의 경우 에러 발생, 확인 필요
-#data2$short_desc2 <- str_replace_all(data22$short_desc, "[?<>+]", "99")
-#data2 %>% write_csv("inc_data22.csv", na = "", locale = locale(encoding = "UTF-8"))
+#data3$short_desc2 <- str_replace_all(data32$short_desc, "[?<>+]", "99")
+#data3 %>% write_csv("inc_data32.csv", na = "", locale = locale(encoding = "UTF-8"))
 
-# data2 check Y_cmg_shortname and pick up first 2 digits -> request_div
-data2 %>% group_by(Y_cmg_shortname, Y_cmg_longname) %>% dplyr::summarise(n = n())
+# data3 check Y_cmg_shortname and pick up first 2 digits -> request_div
+data3 %>% group_by(Y_cmg_shortname, Y_cmg_longname) %>% dplyr::summarise(n = n())
 
-#data2 check with state, resolved date
-data2 %>% distinct(state2)
-data2 %>% filter(state2 == "Closed", is.na(resolved)) 
-data2 %>% filter(state2 == "Progressing", !is.na(resolved)) 
-data2 %>% filter(state2 == "Backlog", !is.na(resolved)) 
+#data3 check with state, resolved date
+data3 %>% distinct(state2)
+data3 %>% filter(state2 == "Closed", is.na(resolved)) 
+data3 %>% filter(state2 == "Progressing", !is.na(resolved)) 
+data3 %>% filter(state2 == "Backlog", !is.na(resolved)) 
 
 #There needs to check the case when Reassignment >= 3, reopen_count >= 2, as it is related to not clear service matirix as well as service lead time  
 temp <-
-  data2 %>% filter(number == "INC1760427" | number == "INC1713730")
+  data3 %>% filter(number == "INC1760427" | number == "INC1713730")
 
-data2 %>% filter(!is.na(resolved), substr(Z_cmguserid,1,1) == "M", reassignment_cnt >= 3) %>% 
+data3 %>% filter(!is.na(resolved), substr(Z_cmguserid,1,1) == "M", reassignment_cnt >= 3) %>% 
   group_by(yyyymm) %>% dplyr::summarise(reassign=n()) %>% arrange(desc(yyyymm))
 
-data2 %>% filter(!is.na(resolved), substr(Z_cmguserid,1,1) == "M", reopen_count >= 2) %>% 
+data3 %>% filter(!is.na(resolved), substr(Z_cmguserid,1,1) == "M", reopen_count >= 2) %>% 
   group_by(yyyymm) %>% dplyr::summarise(reopen=n()) %>% arrange(desc(yyyymm))  
 
 
@@ -332,46 +189,46 @@ data2 %>% filter(!is.na(resolved), substr(Z_cmguserid,1,1) == "M", reopen_count 
 
 ####################################################################################
 
-#Finally let's see characteristics of all the data2 created by Merck employee including IT
-skimmed <- skim_to_wide(filter(data2, substr(Z_cmguserid,1,1) == "M", !is.na(resolved)))
+#Finally let's see characteristics of all the data3 created by Merck employee including IT
+skimmed <- skim_to_wide(filter(data3, substr(Z_cmguserid,1,1) == "M", !is.na(resolved)))
 skimmed[, c(1:5, 9:11, 13, 15:16)]
 skimmed %>% filter(type == "character") %>% arrange(as.numeric(n_unique), desc(missing))
 skimmed %>% filter(type == "numeric") %>% arrange(as.numeric(n_unique), desc(missing))
 skimmed %>% filter(variable %in% c("LT_day","LT_hour")) %>% select(variable, mean,sd,starts_with("p"))
 
-data2 %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved)) %>% 
+data3 %>% filter(substr(Z_cmguserid,1,1) == "M", !is.na(resolved)) %>% 
   ggplot(aes(LT_day)) + geom_histogram(binwidth = 10) + xlim(0,50) 
 
 #quantile(x, probs = c(0.05, 0.06, 0.07, 0.08, 0.09, 0.1),na.rm = FALSE)
 
 ####################################################################################
 
-data2$LT10_20     <- as.factor(data2$LT10_20)
-data2$LT20_40     <- as.factor(data2$LT20_40)
-data2$LT40_up     <- as.factor(data2$LT40_up)
-data2$LT_LRT      <- as.factor(data2$LT_LRT)
-data2$LT_in_time  <- as.factor(data2$LT_in_time)
-data2$LT_ATOP     <- as.factor(data2$LT_ATOP)
-data2$reopen      <- as.factor(data2$reopen)
-data2$reassign    <- as.factor(data2$reassign)
-data2$u_FTR2      <- as.factor(data2$u_FTR2)
-data2$backlog     <- as.factor(data2$backlog)
-data2$state2      <- as.factor(data2$state2)
-data2$request_div <- as.factor(data2$request_div)
+data3$LT10_20     <- as.factor(data3$LT10_20)
+data3$LT20_40     <- as.factor(data3$LT20_40)
+data3$LT40_up     <- as.factor(data3$LT40_up)
+data3$LT_LRT      <- as.factor(data3$LT_LRT)
+data3$LT_in_time  <- as.factor(data3$LT_in_time)
+data3$LT_ATOP     <- as.factor(data3$LT_ATOP)
+data3$reopen      <- as.factor(data3$reopen)
+data3$reassign    <- as.factor(data3$reassign)
+data3$u_FTR2      <- as.factor(data3$u_FTR2)
+data3$backlog     <- as.factor(data3$backlog)
+data3$state2      <- as.factor(data3$state2)
+data3$request_div <- as.factor(data3$request_div)
 
-str(data2)
+str(data3)
 
-Charcol <- names(data2[,sapply(data2, is.character)])
-Numcol <- names(data2[,sapply(data2, is.numeric)])
-Fatcol <- names(data2[,sapply(data2, is.factor)])
+Charcol <- names(data3[,sapply(data3, is.character)])
+Numcol <- names(data3[,sapply(data3, is.numeric)])
+Fatcol <- names(data3[,sapply(data3, is.factor)])
 
-sum(table(data2$X_bs_id))
+sum(table(data3$X_bs_id))
 
-numericVars <- which(sapply(data2, is.numeric))
+numericVars <- which(sapply(data3, is.numeric))
 numericVarNames <- names(numericVars)
 cat("There are", length(numericVars), "numeric variables")
 
-all_numVar <- data2[, numericVars]
+all_numVar <- data3[, numericVars]
 cor_numVar <- cor(all_numVar, use = "pairwise.complete.obs")
 
 cor_sorted <- as.matrix(sort(cor_numVar[,2], decreasing = T)) #eng_business_duration3_sum
@@ -382,18 +239,18 @@ corrplot.mixed(cor_numVar, tl.col ="black",tl.pos="lt")
 
 
 
-#data2 distribution review
-data2 %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60))
-summary(data2$LT_day)
-data2 %>% quantile(data2$LT_day, probs = c(0.5, 0.75, 0.8, 0.9, 0.93, 0.95, 0.97, 0.98, 0.99 ,1),na.rm = FALSE)
+#data3 distribution review
+data3 %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60))
+summary(data3$LT_day)
+data3 %>% quantile(data3$LT_day, probs = c(0.5, 0.75, 0.8, 0.9, 0.93, 0.95, 0.97, 0.98, 0.99 ,1),na.rm = FALSE)
 
-quantile( filter(data2, !is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day, probs = c(0.5, 0.75, 0.8, 0.9, 0.93, 0.95,0.96, 0.97, 0.98, 0.99 ,1))
+quantile( filter(data3, !is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day, probs = c(0.5, 0.75, 0.8, 0.9, 0.93, 0.95,0.96, 0.97, 0.98, 0.99 ,1))
 
-qqnorm(filter(data2, !is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day)
-qqline(filter(data2, !is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day)
+qqnorm(filter(data3, !is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day)
+qqline(filter(data3, !is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day)
 
-qqnorm(filter(data2, !is.na(resolved), LT_day >10 & LT_day <60,  !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day)
-qqline(filter(data2, !is.na(resolved), LT_day >10 & LT_day <60,  !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day)
+qqnorm(filter(data3, !is.na(resolved), LT_day >10 & LT_day <60,  !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day)
+qqline(filter(data3, !is.na(resolved), LT_day >10 & LT_day <60,  !is.na(Y_cmg_shortname) | request_div != "IT")$LT_day)
 
 #x 구간 나누어서 계산하기 break.......???
 summary(cut(temp$LT_day, breaks = c(0, 0.75, 0.90, 0.95, 0.98, 0.99, 1), include.lowest = T))
@@ -403,81 +260,68 @@ temp1 <-
   temp %>% filter(LT_day >= 30) %>% group_by(yyyymm) %>% dplyr::summarize(n = n())
 
 s1 <-
-  data2 %>% filter(reassign == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
+  data3 %>% filter(reassign == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
   ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60)) + 
   ggtitle("RLT distribution with features", subtitle = "Reassigned >=3")
 
 s2 <-
-  data2 %>% filter(reopen == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
+  data3 %>% filter(reopen == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
   ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60)) +
   ggtitle("",subtitle = "Reopened")
 
 s3 <-
-  data2 %>% filter(u_FTR2 == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
+  data3 %>% filter(u_FTR2 == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
   ggplot() + geom_density(aes(x=LT_day, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60)) + 
   ggtitle("",subtitle = "FTR supported")
 
 grid.arrange(s1, s2, s3, widths=1)
 
-data2 %>% nrow()
-data2 %>% filter(abs(LT_day-weekdays) > 5) %>% nrow()
+data3 %>% nrow()
+data3 %>% filter(abs(LT_day-weekdays) > 5) %>% nrow()
 
-data2 %>% filter(abs(LT_day-weekdays) > 5) %>%
+data3 %>% filter(abs(LT_day-weekdays) > 5) %>%
   ggplot() + geom_density(aes(x=LT_day-weekdays, ..scaled..)) + scale_x_log10(breaks = c(0, 1, 2, 3,5, 10,20, 40, 60, 300))
 
 
-data2 %>% distinct(reassignment_cnt)
-data2 %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=reassignment_cnt)) + scale_x_log10(breaks = c(0,1, 2,3,4,5, 10, 20, 30, 40, 60))
+data3 %>% distinct(reassignment_cnt)
+data3 %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot() + geom_density(aes(x=reassignment_cnt)) + scale_x_log10(breaks = c(0,1, 2,3,4,5, 10, 20, 30, 40, 60))
 
-data2 %>% filter(reassign == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
+data3 %>% filter(reassign == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
   ggplot(aes(x = reassignment_cnt, y =LT_day )) + geom_point(alpha = 1/100) + geom_smooth() + ylim(0, 100) + xlim(0, 20)
 
-data2 %>% filter(reassign == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
+data3 %>% filter(reassign == 1) %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% 
   ggplot(aes(x = reassignment_cnt, y =LT_day )) + geom_hex() 
 
 library(randomForest)
 set.seed(2018)
 
 temp <-
-  data2 %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>%
+  data3 %>% filter(!is.na(resolved), LT_day >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>%
   select(LT_day, LT10_20, LT20_40, LT40_up, LT_LRT, reopen, reassign,u_FTR2,reassignment_cnt,reopen_count,request_div, Z_jobfamily, Y_country)
 
 temp %>% filter(is.na(X_bs_id))
 dim(temp)
 quick_RF <- randomForest(x=temp[1:10000,-1], y=temp$LT_day[1:10000], ntree=100,importance=TRUE)
 imp_RF <- importance(quick_RF)
-imp_DF <- data2.frame(Variables = row.names(imp_RF), MSE = imp_RF[,1])
+imp_DF <- data3.frame(Variables = row.names(imp_RF), MSE = imp_RF[,1])
 imp_DF <- imp_DF[order(imp_DF$MSE, decreasing = TRUE),]
 
-str(data2)
+str(data3)
 
 ggplot(imp_DF[1:20,], aes(x=reorder(Variables, MSE), y=MSE, fill=MSE)) + geom_bar(stat = 'identity') + labs(x = 'Variables', y= '% increase MSE if variable is randomly permuted') + coord_flip() + theme(legend.position="none")
 
 
-data2 %>% filter(number == "INC1854118") %>% select(number, created_on2, resolved2, business_duration, weekdays)
+data3 %>% filter(number == "INC1854118") %>% select(number, created_on2, resolved2, business_duration, weekdays)
 
-data2 %>% filter(!is.na(resolved), LT_hour >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_histogram(binwidth = 1) + xlim(0, 40)
-data2 %>% filter(!is.na(resolved), LT_hour >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_freqpoly(aes(color = BSID), binwidth = 1) + xlim(0, 40)
-data2 %>% filter(!is.na(resolved), LT_hour >=10, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_freqpoly(binwidth = 5) + xlim(10, 80)
-data2 %>% filter(!is.na(resolved), LT_hour >=0,  !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(ERP, LT_hour)) + geom_boxplot() + ylim(0, 240) #30 days
+data3 %>% filter(!is.na(resolved), LT_hour >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_histogram(binwidth = 1) + xlim(0, 40)
+data3 %>% filter(!is.na(resolved), LT_hour >0, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_freqpoly(aes(color = BSID), binwidth = 1) + xlim(0, 40)
+data3 %>% filter(!is.na(resolved), LT_hour >=10, !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(LT_day)) + geom_freqpoly(binwidth = 5) + xlim(10, 80)
+data3 %>% filter(!is.na(resolved), LT_hour >=0,  !is.na(Y_cmg_shortname) | request_div != "IT") %>% ggplot(aes(ERP, LT_hour)) + geom_boxplot() + ylim(0, 240) #30 days
 
 temp <-
-  data2 %>% filter(str_detect(assignment_grp, "BT-LL_B")) 
+  data3 %>% filter(str_detect(assignment_grp, "BT-LL_B")) 
 
 NAcols
-####################################################################################
-# Read BSID data2 downloaded on 2019-12-09, filtered by approved status only 
-
-BS_data2 <- read_csv("u_cmdb_ci_service_2019v2.csv")
-
-BS_data2 %>% filter(!is.na(u_bs_id), substr(u_approval_status, 1,8) == "approved") %>% 
-  group_by(u_bs_id) %>% dplyr::summarise(n = n()) %>%
-  filter(n >= 2)
-
-BS_data2 %>% filter(!is.na(u_bs_id), substr(u_approval_status, 1,8) == "approved") %>% 
-  group_by(u_bs_id) %>% top_n(1, u_version) %>% write_csv("BSD_201912.csv", na = "")
-
-BS_data2 %>% filter(u_bs_id == "BS_2257")
 
 ####################################################################################
 
